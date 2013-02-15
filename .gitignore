@@ -11,3 +11,8 @@
 *.lai
 *.la
 *.a
+
+# cmake build directory
+build/*
+lib/*
+bin/*
