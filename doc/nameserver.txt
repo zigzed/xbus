@@ -1,0 +1,22 @@
+nameserver协议
+=============
+
+1. nameserver支持的命令
+命令的请求：
+exists	exists context "node name"
+create	create context "node name"
+remove	remove context "node name"
+getval	getval context "node name" 
+setval	setval context "node name" "value"
+dump	dump context "file name"
+load	load context "file name"
+sync	sync context "offset" "address list" 
+
+其中 context 为一个uuid。
+
+命令的结果：
+result	result context code message
+
+
+2. 命令的结构
+所有的命令都是通过明文字符串的方式进行，每个命令包括命令名、命令参数以及命令结束标志。命令名和命令参数之间用空格分隔。如果有多个命令参数，则每个参数之间用空格分隔。如果命令参数中存在空格，则可以用""来分组，用\作为转义符。命令结束标志为"\r\n"。

@@ -6,6 +6,8 @@ if(COMMAND cmake_policy)
 endif(COMMAND cmake_policy)
 
 set(COMMONLIB_PATH	${PROJECT_SOURCE_DIR}/../common)
+set(COMMONLIB_INC	${COMMONLIB_PATH})
+set(COMMONLIB_LIB	${COMMONLIB_PATH}/lib/${CMAKE_BUILD_TYPE})
 
 if("${CMAKE_SYSTEM_NAME}" MATCHES "Windows")
     if(CMAKE_CL_64)

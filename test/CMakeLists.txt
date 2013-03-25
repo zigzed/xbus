@@ -1,5 +1,6 @@
 
 include_directories(../)
+link_directories(${COMMONLIB_LIB})
 
 set(XBUS_ROOT ${CMAKE_SOURCE_DIR})
 set(LIBRARY_OUTPUT_PATH ${XBUS_ROOT}/lib/${CMAKE_BUILD_TYPE})
