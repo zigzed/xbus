@@ -92,7 +92,6 @@ extern "C" {
     XBUS_API void*      xbus_msg_buf(const xbus_msg* msg);
     XBUS_API int        xbus_msg_len(const xbus_msg* msg);
     XBUS_API int        xbus_msg_tag(const xbus_msg* msg);
-    XBUS_API int64_t    xbus_msg_off(const xbus_msg* msg);
 
     XBUS_API xbus_cfg*  xbus_cfg_init();
     XBUS_API void       xbus_cfg_free(xbus_cfg* cfg);

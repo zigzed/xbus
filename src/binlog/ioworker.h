@@ -3,30 +3,21 @@
 #ifndef BUS_IOWORKER_H
 #define BUS_IOWORKER_H
 #include "binlog.h"
+#include <list>
 
 namespace bus {
 
-    /** io worker for sequence access */
-    class seq_io_worker : public io_worker {
+    class file_base {
     public:
-        seq_io_worker();
-        void        serve(io_request *req);
-        io_worker*  clone();
-        const char* name() const;
-    private:
-        bool    aseek(fd_t fd, int64_t off);
-        void    aread(io_request* req);
-        void    awrite(io_request* req);
-
-        int64_t wpos_;
-        int64_t rpos_;
-        fd_t    wfd_;
-        fd_t    rfd_;
-    };
-
-    /** io worker for random access */
-    class rnd_io_worker : public io_worker {
-
+        static file_base* create();
+        virtual ~file_base() {}
+        virtual bool    open(const char* file) = 0;
+        virtual off_t   seek(off_t pos, int whence) = 0;
+        virtual bool    size(off_t size) = 0;
+        virtual size_t  load(void* buf, size_t len) = 0;
+        virtual size_t  save(const void* buf, size_t len) = 0;
+        virtual bool    flush() = 0;
+        virtual void    close() = 0;
     };
 
 }

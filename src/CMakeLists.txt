@@ -26,7 +26,6 @@ set(XBUS_SRC
     producer.h producer.cpp
     binlog/binlog.h binlog/binlog.cpp
     binlog/ioworker.h binlog/ioworker.cpp
-    binlog/ioqueue.cpp
     )
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
@@ -39,6 +38,9 @@ link_directories(${COMMONLIB_LIB})
 add_library(xbus SHARED ${XBUS_SRC})
 target_link_libraries(xbus common ${PTHREAD} ${DL})
 
-add_executable(test_ioqueue binlog/test_ioqueue.cpp binlog/binlog.h binlog/ioworker.h
-                binlog/ioworker.cpp binlog/ioqueue.cpp)
+add_executable(test_ioqueue binlog/test_ioqueue.cpp 
+                binlog/binlog.h binlog/ioworker.h binlog/binlog.cpp
+                binlog/ioworker.cpp binlog/ioqueue.cpp
+                xbus_msg.h xbus_msg.cpp
+              )
 target_link_libraries(test_ioqueue common gtest ${PTHREAD})

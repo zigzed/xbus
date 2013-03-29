@@ -10,23 +10,24 @@ namespace bus {
 
     class xbus_msg_t : public xbus_msg {
     public:
-        static xbus_msg_t* alloc(int32_t tag, int32_t len, const void* buf);
-        static void        xfree(xbus_msg_t* msg);
-
-        xbus_msg_t(int32_t tag, int32_t len);
+        static xbus_msg*    alloc(int32_t tag, int32_t len, const void* buf);
+        static void         xfree(xbus_msg_t* msg);
     };
 
 
-    xbus_msg_t* xbus_msg_t::alloc(int32_t tag, int32_t len, const void *buf)
+    xbus_msg* xbus_msg_t::alloc(int32_t tag, int32_t len, const void *buf)
     {
-        int32_t     size = len + sizeof(xbus_msg_t) + sizeof(cxx::sys::atomic_t);
+        int32_t     size = len + sizeof(xbus_msg) + sizeof(cxx::sys::atomic_t)
+                           + sizeof(tag) + sizeof(len);
         char*       buff = (char* )malloc(size);
-        xbus_msg_t* msg  = new (buff) xbus_msg_t(tag, len);
-        msg->off = 0;
-        msg->ref = new (buff + sizeof(xbus_msg_t)) cxx::sys::atomic_t(1);
-        msg->buf = (char* )buff + sizeof(xbus_msg_t) + sizeof(cxx::sys::atomic_t);
-        if(buf)
-            memcpy(msg->buf, buf, len);
+        xbus_msg*   msg  = new (buff) xbus_msg();
+        msg->ref = new (buff + sizeof(xbus_msg)) cxx::sys::atomic_t(1);
+        msg->buf = (char* )buff + sizeof(xbus_msg) + sizeof(cxx::sys::atomic_t);
+        if(buf) {
+            memcpy(msg->buf, &len, sizeof(len));
+            memcpy((char* )msg->buf + sizeof(len), &tag, sizeof(tag));
+            memcpy((char* )msg->buf + sizeof(len) + sizeof(tag), buf, len);
+        }
         return msg;
     }
 
@@ -35,12 +36,6 @@ namespace bus {
         if(--*(cxx::sys::atomic_t* )msg->ref == 0) {
             free(msg);
         }
-    }
-
-    xbus_msg_t::xbus_msg_t(int32_t t, int32_t l)
-    {
-        this->tag = t;
-        this->len = l;
     }
 
 }
@@ -68,9 +63,6 @@ int xbus_msg_copy(xbus_msg *dst, const xbus_msg *src)
     if(dst == src)
         return 1;
 
-    dst->len = src->len;
-    dst->tag = src->tag;
-    dst->off = src->off;
     dst->buf = src->buf;
     dst->ref = src->ref;
     ((cxx::sys::atomic_t* )src->ref)->add(1);
@@ -86,9 +78,6 @@ int xbus_msg_move(xbus_msg *dst, xbus_msg *src)
     if(dst == src)
         return 1;
 
-    dst->len = src->len;
-    dst->tag = src->tag;
-    dst->off = src->off;
     dst->buf = src->buf;
     dst->ref = src->ref;
     return 1;
@@ -96,22 +85,21 @@ int xbus_msg_move(xbus_msg *dst, xbus_msg *src)
 
 void* xbus_msg_buf(const xbus_msg *msg)
 {
-    return msg->buf;
+    return (char* )msg->buf + sizeof(int32_t) + sizeof(int32_t);
 }
 
 int xbus_msg_len(const xbus_msg *msg)
 {
-    return msg->len;
+    int32_t len = 0;
+    memcpy(&len, msg->buf, sizeof(len));
+    return len;
 }
 
 int xbus_msg_tag(const xbus_msg *msg)
 {
-    return msg->tag;
-}
-
-int64_t xbus_msg_off(const xbus_msg *msg)
-{
-    return msg->off;
+    int32_t tag = 0;
+    memcpy(&tag, (char* )msg->buf + sizeof(int32_t), sizeof(tag));
+    return tag;
 }
 
 #ifdef __cplusplus

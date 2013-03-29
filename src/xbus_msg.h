@@ -9,9 +9,6 @@ extern "C" {
 #endif
 
 struct xbus_msg {
-    int32_t len;
-    int32_t tag;
-    int64_t off;
     void*   ref;
     void*   buf;
 };

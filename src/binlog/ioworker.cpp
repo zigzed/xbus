@@ -2,109 +2,99 @@
  */
 #include "ioworker.h"
 #include "common/sys/error.h"
-#ifdef  OS_WINDOWS
-#else
+#include <stdio.h>
 #include <unistd.h>
-#endif
 
 namespace bus {
 
-    seq_io_worker::seq_io_worker()
-        : wpos_(0), rpos_(0), wfd_(-1), rfd_(-1)
+    class stdio_file : public file_base {
+    public:
+        stdio_file();
+        bool    open(const char *file);
+        off_t   seek(off_t pos, int whence);
+        bool    size(off_t size);
+        size_t  load(void *buf, size_t len);
+        size_t  save(const void *buf, size_t len);
+        bool    flush();
+        void    close();
+    private:
+        FILE*       file_;
+        std::string name_;
+    };
+
+
+    file_base* file_base::create()
+    {
+        return new stdio_file();
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    stdio_file::stdio_file() : file_(NULL)
     {
     }
 
-    void seq_io_worker::serve(io_request *req)
+    bool stdio_file::open(const char *file)
     {
-        if(req->req == io_request::READ) {
-            if(rfd_ == -1) {
-                rfd_ = req->fid;
-            }
-            if(rpos_ == 0) {
-                rpos_ = req->off;
-                if(!aseek(rfd_, rpos_)) {
-                    int code = cxx::sys::err::get();
-                    return req->aio->on_failed(req, code);
-                }
-            }
-
-            ENFORCE(rpos_ == req->off)(rpos_)(req->off);
-            ENFORCE(rfd_ == req->fid)(rfd_)(req->fid);
-
-            aread(req);
-        }
-        else if(req->req == io_request::WRITE) {
-            if(wfd_ == -1) {
-                wfd_ = req->fid;
-            }
-            if(wpos_ == 0) {
-                wpos_ = req->off;
-                if(!aseek(wfd_, wpos_)) {
-                    int code = cxx::sys::err::get();
-                    return req->aio->on_failed(req, code);
-                }
-            }
-            ENFORCE(wpos_ == req->off)(wpos_)(req->off);
-            ENFORCE(wfd_ == req->fid)(wfd_)(req->fid);
-
-            awrite(req);
-        }
-        else {
-            req->aio->on_failed(req, -1);
-        }
+        name_ = file;
+        close();
+        // 文件打开方式不能使用 a+，因为 a+ 模式下所有的写操作都是 append，seek 对后续
+        // 的写操作没有影响
+        file_ = ::fopen(file, "a+");
+        file_ = freopen(file, "r+", file_);
+        return file_ != NULL;
     }
 
-    io_worker* seq_io_worker::clone()
+    off_t stdio_file::seek(off_t pos, int whence)
     {
-        seq_io_worker* w = new seq_io_worker();
-        return w;
+        int rc = ::fseeko(file_, pos, whence);
+        if(rc == 0)
+            return ftello(file_);
+        return rc;
     }
 
-    bool seq_io_worker::aseek(fd_t fd, int64_t off)
+    bool stdio_file::size(off_t size)
     {
-#ifdef  OS_WINDOWS
+#ifndef OS_WINDOWS
+        int rc = ::truncate(name_.c_str(), size);
+        return rc == 0;
 #else
-        int rc = ::lseek(fd, off, SEEK_SET);
-        return rc >= 0;
+        off_t len = ftell(file_);
+        if(len < size) {
+            char    temp[512];
+            off_t   byte = size - len > 512 ? 512 : size - len;
+            save(temp, byte);
+            len += byte;
+        }
+        len = ftell(file_);
+        return len == size;
 #endif
     }
 
-    void seq_io_worker::aread(io_request *req)
+    size_t stdio_file::load(void *buf, size_t len)
     {
-#ifdef OS_WINDOWS
-#else
-        int rc = ::read(rfd_, req->buf, req->len);
-        if(rc <= 0) {
-            int code = cxx::sys::err::get();
-            return req->aio->on_failed(req, code);
-        }
-#endif
-        rpos_ += rc;
-        if(rc < req->len) {
-            memset((char* )req->buf + rc, 0, req->len - rc);
-        }
-
-        return req->aio->on_finish(req);
+        size_t rc = ::fread(buf, 1, len, file_);
+        return rc;
     }
 
-    void seq_io_worker::awrite(io_request *req)
+    size_t stdio_file::save(const void *buf, size_t len)
     {
-#ifdef OS_WINDOWS
-#else
-        int rc = ::write(wfd_, req->buf, req->len);
-        if(rc <= 0) {
-            int code = cxx::sys::err::get();
-            return req->aio->on_failed(req, code);
+        size_t rc = ::fwrite(buf, 1, len, file_);
+        return rc;
+    }
+
+    bool stdio_file::flush()
+    {
+        int rc = fflush(file_);
+        return rc == 0;
+    }
+
+    void stdio_file::close()
+    {
+        if(file_) {
+            ::fclose(file_);
+            file_ = NULL;
         }
-#endif
-        wpos_ += rc;
-
-        return req->aio->on_finish(req);
     }
-
-    const char* seq_io_worker::name() const
-    {
-        return "sequence io worker";
-    }
+            
 
 }

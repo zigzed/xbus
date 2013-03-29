@@ -71,26 +71,26 @@ namespace bus {
         int64_t off = arg->off;
         bool*   run = arg->run;
 
-        cxx::con::filer f(c, topic.c_str());
-        f.seek(off, SEEK_SET);
+//        cxx::con::filer f(c, topic.c_str());
+//        f.seek(off, SEEK_SET);
 
-        while(*run) {
-            int32_t len = 0;
-            int32_t tag = 0;
-            if(f.load((char* )&len, sizeof(len)) <= 0)
-                break;
-            if(f.load((char* )&tag, sizeof(tag)) <= 0)
-                break;
+//        while(*run) {
+//            int32_t len = 0;
+//            int32_t tag = 0;
+//            if(f.load((char* )&len, sizeof(len)) <= 0)
+//                break;
+//            if(f.load((char* )&tag, sizeof(tag)) <= 0)
+//                break;
 
-            xbus_msg* msg = xbus_msg_init(tag, NULL, len - sizeof(tag) - sizeof(len));
-            if(f.load((char* )msg->buf, msg->len) <= 0)
-                break;
-            msg->off = off;
-            chan->send(c, msg, 0);
-            off += len;
-        }
+//            xbus_msg* msg = xbus_msg_init(tag, NULL, len - sizeof(tag) - sizeof(len));
+//            if(f.load((char* )msg->buf, msg->len) <= 0)
+//                break;
+//            msg->off = off;
+//            chan->send(c, msg, 0);
+//            off += len;
+//        }
 
-        f.close();
+//        f.close();
     }
 
     void simple_producer::sending(cxx::con::coroutine *c, void *p)
@@ -102,57 +102,57 @@ namespace bus {
         bool*           run  = arg->run;
         std::string     topic= arg->topic;
 
-        while(*run) {
+//        while(*run) {
 
-            cxx::con::connector connector(c, true);
-            cxx::net::fd_t fd = connector.connect(addr.c_str(), port, 5000);
-            if(fd == -1)
-                continue;
+//            cxx::con::connector connector(c, true);
+//            cxx::net::fd_t fd = connector.connect(addr.c_str(), port, 5000);
+//            if(fd == -1)
+//                continue;
 
-            // 连接成功后发送 producer 的类型，并等待 consumer 发送偏移量
-            cxx::con::socketor  sender(c, fd);
-            int32_t ver = 0;
-            int64_t off = 0;
-            if(sender.send((char* )&ver, sizeof(ver)) <= 0) {
-                sender.close();
-                break;
-            }
-            // 如果超时没有收到 consumer 发送的偏移量，则断开连接
-            if(sender.recv((char* )&off, sizeof(off), 1000) <= 0) {
-                sender.close();
-                break;
-            }
+//            // 连接成功后发送 producer 的类型，并等待 consumer 发送偏移量
+//            cxx::con::socketor  sender(c, fd);
+//            int32_t ver = 0;
+//            int64_t off = 0;
+//            if(sender.send((char* )&ver, sizeof(ver)) <= 0) {
+//                sender.close();
+//                break;
+//            }
+//            // 如果超时没有收到 consumer 发送的偏移量，则断开连接
+//            if(sender.recv((char* )&off, sizeof(off), 1000) <= 0) {
+//                sender.close();
+//                break;
+//            }
 
-            // 协商完毕后，按照指定的偏移量读取数据
-            reading_arg arg;
-            arg.chan = chan;
-            arg.off  = off;
-            arg.run  = run;
-            arg.topic= topic;
-            c->sched()->spawn(simple_producer::reading, &arg);
+//            // 协商完毕后，按照指定的偏移量读取数据
+//            reading_arg arg;
+//            arg.chan = chan;
+//            arg.off  = off;
+//            arg.run  = run;
+//            arg.topic= topic;
+//            c->sched()->spawn(simple_producer::reading, &arg);
 
-            // 根据读取的数据发送
-            xbus_msg* msg = NULL;
-            while(chan->recv(c, msg)) {
-                int32_t total_len = msg->len + sizeof(msg->tag) + sizeof(msg->off);
-                if(sender.send((char* )&total_len, sizeof(total_len)) <= 0)
-                    break;
-                if(sender.send((char* )&msg->tag, sizeof(msg->tag)) <= 0)
-                    break;
-                if(sender.send((char* )&msg->off, sizeof(msg->off)) <= 0)
-                    break;
-                if(sender.send((char* )msg->buf, msg->len) <= 0)
-                    break;
+//            // 根据读取的数据发送
+//            xbus_msg* msg = NULL;
+//            while(chan->recv(c, msg)) {
+//                int32_t total_len = msg->len + sizeof(msg->tag) + sizeof(msg->off);
+//                if(sender.send((char* )&total_len, sizeof(total_len)) <= 0)
+//                    break;
+//                if(sender.send((char* )&msg->tag, sizeof(msg->tag)) <= 0)
+//                    break;
+//                if(sender.send((char* )&msg->off, sizeof(msg->off)) <= 0)
+//                    break;
+//                if(sender.send((char* )msg->buf, msg->len) <= 0)
+//                    break;
 
-                xbus_msg_free(msg);
-                msg = NULL;
-            }
+//                xbus_msg_free(msg);
+//                msg = NULL;
+//            }
 
-            if(msg)
-                xbus_msg_free(msg);
+//            if(msg)
+//                xbus_msg_free(msg);
 
-            sender.close();
-        }
+//            sender.close();
+//        }
     }
 
 
