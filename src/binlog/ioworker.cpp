@@ -2,7 +2,10 @@
  */
 #include "ioworker.h"
 #include "common/sys/error.h"
+#include "common/ipc/mmap.h"
 #include <stdio.h>
+#include <assert.h>
+#include <string.h>
 #include <unistd.h>
 
 namespace bus {
@@ -22,10 +25,151 @@ namespace bus {
         std::string name_;
     };
 
+    class shmap_file : public file_base {
+    public:
+        shmap_file();
+        bool    open(const char* file);
+        off_t   seek(off_t pos, int whence);
+        bool    size(off_t size);
+        size_t  load(void* buf, size_t len);
+        size_t  save(const void* buf, size_t len);
+        bool    flush();
+        void    close();
+    private:
+        enum { CACHE_SIZE = 2 * 1024 * 1024 };
+        cxx::ipc::file_mapping*     shmfile_;
+        cxx::ipc::mapped_region*    mapping_;
+        off_t                       cur_pos_;
+        bool                        isdirty_;
+        off_t                       map_off_;
+        off_t                       map_len_;
+        off_t                       shm_len_;
+    };
+
 
     file_base* file_base::create()
     {
-        return new stdio_file();
+        return new shmap_file();
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    shmap_file::shmap_file() : shmfile_(NULL), mapping_(NULL),
+        cur_pos_(0), isdirty_(false), map_off_(0), map_len_(0), shm_len_(0)
+    {
+    }
+
+    bool shmap_file::open(const char *file)
+    {
+        shmfile_ = new cxx::ipc::file_mapping(file, cxx::ipc::memory_mappable::ReadWrite);
+        shm_len_ = shmfile_->size();
+        mapping_ = new cxx::ipc::mapped_region(*shmfile_, cxx::ipc::mapped_region::ReadWrite, 0, CACHE_SIZE);
+        map_off_ = mapping_->offset();
+        map_len_ = mapping_->size();
+    }
+
+    off_t shmap_file::seek(off_t pos, int whence)
+    {
+        if(whence == SEEK_END)
+            pos += shm_len_;
+        else if(whence == SEEK_CUR)
+            pos += cur_pos_;
+
+        cur_pos_ = pos;
+
+        return cur_pos_;
+    }
+
+    bool shmap_file::size(off_t size)
+    {
+        shmfile_->size(size);
+        shm_len_ = shmfile_->size();
+        assert(shm_len_ == size);
+        return true;
+    }
+
+    size_t shmap_file::load(void *buf, size_t len)
+    {
+        assert(len <= CACHE_SIZE);
+        if(shm_len_ == 0) {
+            shm_len_ = shmfile_->size();
+            if(shm_len_ < map_len_)
+                map_len_ = shm_len_;
+        }
+
+        if(cur_pos_ < map_off_ || cur_pos_ + len > map_off_ + map_len_) {
+            if(isdirty_) {
+                isdirty_ = false;
+                mapping_->commit();
+            }
+            mapping_->move(cur_pos_, CACHE_SIZE);
+            map_off_ = mapping_->offset();
+            map_len_ = mapping_->size();
+        }
+        if(cur_pos_ + len > shm_len_)
+            len = shm_len_ - cur_pos_;
+
+        if(cur_pos_ >= map_off_ && cur_pos_ + len <= map_off_ + map_len_) {
+            void* ptr = mapping_->data();
+            off_t off = cur_pos_ - map_off_;
+            memcpy(buf, (char* )ptr + off, len);
+            cur_pos_ += len;
+            return len;
+        }
+        assert(false);
+        return 0;
+    }
+
+    size_t shmap_file::save(const void *buf, size_t len)
+    {
+        assert(len <= CACHE_SIZE);
+
+        if(shm_len_ == 0) {
+            shm_len_ = shmfile_->size();
+            if(shm_len_ < map_len_)
+                map_len_ = shm_len_;
+        }
+
+        if(cur_pos_ < map_off_ || cur_pos_ + len > map_off_ + map_len_) {
+            if(isdirty_) {
+                isdirty_ = false;
+                mapping_->commit();
+            }
+            mapping_->move(cur_pos_, CACHE_SIZE);
+            map_off_ = mapping_->offset();
+            map_len_ = mapping_->size();
+        }
+
+        if(cur_pos_ + len > shm_len_)
+            len = shm_len_ - cur_pos_;
+
+        if(cur_pos_ >= map_off_ && cur_pos_ + len <= map_off_ + map_len_) {
+            isdirty_ = true;
+            void* ptr = mapping_->data();
+            off_t off = cur_pos_ - map_off_;
+            memcpy((char* )ptr + off, buf, len);
+            cur_pos_ += len;
+            return len;
+        }
+        assert(false);
+        return 0;
+    }
+
+    bool shmap_file::flush()
+    {
+        if(isdirty_) {
+            isdirty_ = false;
+            mapping_->commit();
+        }
+        return true;
+    }
+
+    void shmap_file::close()
+    {
+        flush();
+        delete mapping_;
+        mapping_ = NULL;
+        delete shmfile_;
+        shmfile_ = NULL;
     }
 
     ////////////////////////////////////////////////////////////////////////////

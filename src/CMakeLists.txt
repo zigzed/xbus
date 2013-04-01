@@ -40,7 +40,7 @@ target_link_libraries(xbus common ${PTHREAD} ${DL})
 
 add_executable(test_ioqueue binlog/test_ioqueue.cpp 
                 binlog/binlog.h binlog/ioworker.h binlog/binlog.cpp
-                binlog/ioworker.cpp binlog/ioqueue.cpp
+                binlog/ioworker.cpp
                 xbus_msg.h xbus_msg.cpp
               )
 target_link_libraries(test_ioqueue common gtest ${PTHREAD})

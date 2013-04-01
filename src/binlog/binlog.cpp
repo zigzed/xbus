@@ -124,7 +124,9 @@ namespace bus {
             int32_t len = 0;
             int32_t tag = 0;
             getfp_->load(&len, sizeof(len));
-            int32_t required = ceil(len + sizeof(tag), sizeof(len));
+            // 计算 sizeof(len) 对齐的时候需要将长度字节计算在内。当时因为已经读取了
+            // 长度信息，所以 required 需要减去 sizeof(len)
+            int32_t required = ceil(len + sizeof(tag) + sizeof(len), sizeof(len)) - sizeof(len);
             assert(rpos + sizeof(len) + required <= wpos);
 
             char* buf = cache_;
@@ -143,6 +145,7 @@ namespace bus {
             if(buf != cache_)
                 delete[] buf;
 
+            update();
             return msg;
         }
         // 如果位置关系为 HEAD---W---R---TAIL，只需要考虑 R 和 TAIL 之间的空间
@@ -153,7 +156,10 @@ namespace bus {
             int32_t left = header_.size - rpos;
             assert(left >= sizeof(len));
             getfp_->load(&len, sizeof(len));
-            int32_t required = ceil(len + sizeof(tag), sizeof(len));
+            left -= sizeof(len);
+            // 计算 sizeof(len) 对齐的时候需要将长度字节计算在内。当时因为已经读取了
+            // 长度信息，所以 required 需要减去 sizeof(len)
+            int32_t required = ceil(len + sizeof(tag) + sizeof(len), sizeof(len)) - sizeof(len);
 
             char* buf = cache_;
             if(required > CACHE_SIZE)
@@ -193,10 +199,11 @@ namespace bus {
 
     void binlog::update()
     {
-        if(count_++ % 1000 == 0) {
+        if(count_++ % FLUSH_ITER == 0) {
             hdrfp_->seek(0, SEEK_SET);
             hdrfp_->save(&header_, sizeof(header_));
             hdrfp_->flush();
+            putfp_->flush();
         }
     }
 

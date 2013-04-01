@@ -31,6 +31,7 @@ namespace bus {
         };
 
         enum { CACHE_SIZE = 2048 };
+        enum { FLUSH_ITER = 1000 };
         header          header_;
         file_base*      hdrfp_;
         file_base*      putfp_;
