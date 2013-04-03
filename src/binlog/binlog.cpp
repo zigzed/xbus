@@ -23,15 +23,16 @@ namespace bus {
 
     ////////////////////////////////////////////////////////////////////////////
     binlog::binlog(const char *name, off_t capacity)
-        : hdrfp_(NULL), putfp_(NULL), getfp_(NULL), count_(0), cache_(NULL)
+        : hdrfp_(NULL), putfp_(NULL), getfp_(NULL), count_(0), cache_(NULL),
+          fname_(name)
     {
         bool existed = is_file_exist(name);
         hdrfp_ = file_base::create();
         putfp_ = file_base::create();
         getfp_ = file_base::create();
-        hdrfp_->open(name);
-        putfp_->open(name);
-        getfp_->open(name);
+        hdrfp_->open(name, 4096);
+        putfp_->open(name, 2*1024*1024);
+        getfp_->open(name, 2*1024*1024);
 
         if(existed) {
             hdrfp_->seek(0, SEEK_SET);
@@ -41,6 +42,8 @@ namespace bus {
             header_.size = ceil(capacity, sizeof(int32_t));
             header_.wpos = 0;
             header_.rpos = 0;
+            header_.wcnt = 0;
+            header_.rcnt = 0;
             hdrfp_->size(sizeof(header) + header_.size);
             off_t off = hdrfp_->seek(0, SEEK_SET);
             assert(off == 0);
@@ -54,16 +57,22 @@ namespace bus {
 
     binlog::~binlog()
     {
-        hdrfp_->seek(0, SEEK_SET);
-        hdrfp_->save(&header_, sizeof(header_));
-        hdrfp_->close();
-        delete hdrfp_;
+        if(hdrfp_) {
+            hdrfp_->seek(0, SEEK_SET);
+            hdrfp_->save(&header_, sizeof(header_));
+            hdrfp_->close();
+            delete hdrfp_;
+        }
 
-        putfp_->close();
-        delete putfp_;
+        if(putfp_) {
+            putfp_->close();
+            delete putfp_;
+        }
 
-        getfp_->close();
-        delete getfp_;
+        if(getfp_) {
+            getfp_->close();
+            delete getfp_;
+        }
 
         delete[] cache_;
     }
@@ -107,6 +116,8 @@ namespace bus {
         if(header_.wpos % header_.size == 0)
             putfp_->seek(sizeof(header_), SEEK_SET);
 
+        header_.wcnt++;
+
         update();
         return true;
     }
@@ -119,7 +130,9 @@ namespace bus {
         off_t wpos = header_.wpos % header_.size;
         off_t rpos = header_.rpos % header_.size;
 
-        if(wpos >= rpos) {
+        if(header_.wpos == header_.rpos)
+            return NULL;
+        else if(wpos > rpos) {
             // 如果位置关系为 HEAD---R---W---TAIL，那么需要考虑 R 和 W 之间的空间
             int32_t len = 0;
             int32_t tag = 0;
@@ -127,7 +140,7 @@ namespace bus {
             // 计算 sizeof(len) 对齐的时候需要将长度字节计算在内。当时因为已经读取了
             // 长度信息，所以 required 需要减去 sizeof(len)
             int32_t required = ceil(len + sizeof(tag) + sizeof(len), sizeof(len)) - sizeof(len);
-            assert(rpos + sizeof(len) + required <= wpos);
+            assert(header_.rpos + sizeof(len) + required <= header_.wpos);
 
             char* buf = cache_;
             if(required > CACHE_SIZE) {
@@ -146,6 +159,7 @@ namespace bus {
                 delete[] buf;
 
             update();
+            header_.rcnt++;
             return msg;
         }
         // 如果位置关系为 HEAD---W---R---TAIL，只需要考虑 R 和 TAIL 之间的空间
@@ -160,6 +174,7 @@ namespace bus {
             // 计算 sizeof(len) 对齐的时候需要将长度字节计算在内。当时因为已经读取了
             // 长度信息，所以 required 需要减去 sizeof(len)
             int32_t required = ceil(len + sizeof(tag) + sizeof(len), sizeof(len)) - sizeof(len);
+            assert(header_.rpos + sizeof(len) + required <= header_.wpos);
 
             char* buf = cache_;
             if(required > CACHE_SIZE)
@@ -183,18 +198,45 @@ namespace bus {
                 delete[] buf;
 
             update();
+            header_.rcnt++;
             return msg;
         }
     }
 
-    bool binlog::full()
+    bool binlog::full() const
     {
         return header_.wpos + sizeof(int32_t) >= header_.rpos + header_.size;
     }
 
-    bool binlog::empty()
+    off_t binlog::used() const
+    {
+        return header_.wpos - header_.rpos;
+    }
+
+    off_t binlog::size() const
+    {
+        return header_.size;
+    }
+
+    bool binlog::empty() const
     {
         return header_.rpos == header_.wpos;
+    }
+
+    const binlog::header* binlog::stat() const
+    {
+        return &header_;
+    }
+
+    void binlog::remove()
+    {
+        delete hdrfp_;
+        delete getfp_;
+        delete putfp_;
+        hdrfp_ = NULL;
+        getfp_ = NULL;
+        putfp_ = NULL;
+        binlog::remove(this->fname_.c_str());
     }
 
     void binlog::update()
@@ -210,6 +252,45 @@ namespace bus {
     void binlog::remove(const char *name)
     {
         ::unlink(name);
+    }
+
+    binlog::checkpoint binlog::mounted()
+    {
+        header* cp = new header(header_);
+        return cp;
+    }
+
+    void binlog::discard(checkpoint cp)
+    {
+        header* hd = (header* )cp;
+        delete hd;
+    }
+
+    bool binlog::restart(checkpoint cp, CP_TYPE type)
+    {
+        header* hd = (header* )cp;
+        if(header_.wpos >= hd->rpos + hd->size) {
+            delete hd;
+            return false;
+        }
+        if(header_.rpos >= hd->rpos + hd->size) {
+            delete hd;
+            return false;
+        }
+
+        memcpy(&header_, hd, sizeof(header_));
+        delete hd;
+
+        hdrfp_->flush();
+
+        if((type & READER) == READER) {
+            getfp_->seek(header_.rpos % header_.size + sizeof(header_), SEEK_SET);
+        }
+        if((type & WRITER) == WRITER) {
+            putfp_->seek(header_.wpos % header_.size + sizeof(header_), SEEK_SET);
+        }
+
+        return true;
     }
 
     ////////////////////////////////////////////////////////////////////////////

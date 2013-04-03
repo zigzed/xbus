@@ -11,7 +11,7 @@ extern "C" {
 struct xbus_cfg {
     enum {
         BUS_COMPRESS, BUS_FLUSH, BUS_THREAD,
-        PUB_WINDOW,
+        PUB_WINDOW, PUB_CACHE,
         SUB_PRIORITY, SUB_OFFSET,
         XBUS_CFG_SIZE
     };

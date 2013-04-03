@@ -25,6 +25,7 @@ set(XBUS_SRC
     xbus_cfg.h xbus_cfg.cpp
     producer.h producer.cpp
     binlog/binlog.h binlog/binlog.cpp
+    binlog/binlogset.cpp
     binlog/ioworker.h binlog/ioworker.cpp
     )
 
@@ -40,7 +41,13 @@ target_link_libraries(xbus common ${PTHREAD} ${DL})
 
 add_executable(test_ioqueue binlog/test_ioqueue.cpp 
                 binlog/binlog.h binlog/ioworker.h binlog/binlog.cpp
-                binlog/ioworker.cpp
+                binlog/ioworker.cpp binlog/binlogset.cpp
                 xbus_msg.h xbus_msg.cpp
               )
 target_link_libraries(test_ioqueue common gtest ${PTHREAD})
+add_executable(binlog_iter binlog/binlog_iter.cpp 
+		binlog/binlog.h binlog/ioworker.h binlog/binlog.cpp
+        binlog/ioworker.cpp binlog/binlogset.cpp
+		xbus_msg.h xbus_msg.cpp
+		)
+target_link_libraries(binlog_iter common ${PTHREAD})

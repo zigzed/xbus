@@ -11,7 +11,7 @@ namespace bus {
     public:
         static file_base* create();
         virtual ~file_base() {}
-        virtual bool    open(const char* file) = 0;
+        virtual bool    open(const char* file, size_t cache) = 0;
         virtual off_t   seek(off_t pos, int whence) = 0;
         virtual bool    size(off_t size) = 0;
         virtual size_t  load(void* buf, size_t len) = 0;

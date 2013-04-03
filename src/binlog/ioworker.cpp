@@ -13,7 +13,7 @@ namespace bus {
     class stdio_file : public file_base {
     public:
         stdio_file();
-        bool    open(const char *file);
+        bool    open(const char *file, size_t cache);
         off_t   seek(off_t pos, int whence);
         bool    size(off_t size);
         size_t  load(void *buf, size_t len);
@@ -28,7 +28,7 @@ namespace bus {
     class shmap_file : public file_base {
     public:
         shmap_file();
-        bool    open(const char* file);
+        bool    open(const char* file, size_t cache);
         off_t   seek(off_t pos, int whence);
         bool    size(off_t size);
         size_t  load(void* buf, size_t len);
@@ -44,6 +44,7 @@ namespace bus {
         off_t                       map_off_;
         off_t                       map_len_;
         off_t                       shm_len_;
+        size_t                      caching_;
     };
 
 
@@ -54,15 +55,20 @@ namespace bus {
 
     ////////////////////////////////////////////////////////////////////////////
     shmap_file::shmap_file() : shmfile_(NULL), mapping_(NULL),
-        cur_pos_(0), isdirty_(false), map_off_(0), map_len_(0), shm_len_(0)
+        cur_pos_(0), isdirty_(false), map_off_(0), map_len_(0), shm_len_(0),
+        caching_(0)
     {
     }
 
-    bool shmap_file::open(const char *file)
+    bool shmap_file::open(const char *file, size_t cache)
     {
+        caching_ = CACHE_SIZE;
+        if(cache > 0)
+            caching_ = cache;
+
         shmfile_ = new cxx::ipc::file_mapping(file, cxx::ipc::memory_mappable::ReadWrite);
         shm_len_ = shmfile_->size();
-        mapping_ = new cxx::ipc::mapped_region(*shmfile_, cxx::ipc::mapped_region::ReadWrite, 0, CACHE_SIZE);
+        mapping_ = new cxx::ipc::mapped_region(*shmfile_, cxx::ipc::mapped_region::ReadWrite, 0, caching_);
         map_off_ = mapping_->offset();
         map_len_ = mapping_->size();
     }
@@ -89,7 +95,7 @@ namespace bus {
 
     size_t shmap_file::load(void *buf, size_t len)
     {
-        assert(len <= CACHE_SIZE);
+        assert(len <= caching_);
         if(shm_len_ == 0) {
             shm_len_ = shmfile_->size();
             if(shm_len_ < map_len_)
@@ -101,7 +107,7 @@ namespace bus {
                 isdirty_ = false;
                 mapping_->commit();
             }
-            mapping_->move(cur_pos_, CACHE_SIZE);
+            mapping_->move(cur_pos_, caching_);
             map_off_ = mapping_->offset();
             map_len_ = mapping_->size();
         }
@@ -121,7 +127,7 @@ namespace bus {
 
     size_t shmap_file::save(const void *buf, size_t len)
     {
-        assert(len <= CACHE_SIZE);
+        assert(len <= caching_);
 
         if(shm_len_ == 0) {
             shm_len_ = shmfile_->size();
@@ -134,7 +140,7 @@ namespace bus {
                 isdirty_ = false;
                 mapping_->commit();
             }
-            mapping_->move(cur_pos_, CACHE_SIZE);
+            mapping_->move(cur_pos_, caching_);
             map_off_ = mapping_->offset();
             map_len_ = mapping_->size();
         }
@@ -177,7 +183,7 @@ namespace bus {
     {
     }
 
-    bool stdio_file::open(const char *file)
+    bool stdio_file::open(const char *file, size_t)
     {
         name_ = file;
         close();

@@ -102,6 +102,7 @@ extern "C" {
      *  + bus.flush     默认刷新周期为5分钟
      *  + bus.thread    默认线程数量为1
      *  + pub.window    默认发送滑动窗口大小为100
+     *  + pub.cache     默认的发送缓存文件大小为 4096（单位MB）
      *  + sub.priority  默认接收优先级为100
      *  + sub.offset    默认接收消息偏移量为0
      * @param   value   配置项的值
