@@ -140,8 +140,25 @@ namespace bus {
         // 保证binlog加载的顺序
         std::sort(files.begin(), files.end());
         for(size_t i = 0; i < files.size(); ++i) {
-            binlog* blog = new binlog(files[i].c_str(), size_);
+            size_t cache = 2 * 1024 * 1024;
+            if(size_ < cache)
+                cache = size_;
+            binlog* blog = new binlog(files[i].c_str(), size_, cache);
             logs_.push_back(blog);
+        }
+        if(logs_.empty()) {
+            make_log();
+        }
+
+        for(size_t i = 0; i < logs_.size(); ++i) {
+            if(writer_ == NULL && !logs_[i]->full()) {
+                writer_ = logs_[i];
+            }
+            if(reader_ == NULL && !logs_[i]->empty()) {
+                reader_ = logs_[i];
+            }
+            if(writer_ != NULL && reader_ != NULL)
+                break;
         }
     }
 
@@ -156,7 +173,10 @@ namespace bus {
         sprintf(fullname, "%s/%08d.binlog", file_.c_str(), maxid_);
         maxid_++;
 
-        binlog* blog = new binlog(fullname, size_);
+        size_t cache = 2 * 1024 * 1024;
+        if(size_ < cache)
+            cache = size_;
+        binlog* blog = new binlog(fullname, size_, cache);
         logs_.push_back(blog);
 
         return blog;

@@ -27,7 +27,7 @@ namespace bus {
         enum CP_TYPE { READER = 1, WRITER = 2, BOTH = READER | WRITER };
 
         static void remove(const char* name);
-        binlog(const char* name, off_t capacity);
+        binlog(const char* name, off_t capacity, size_t cache = 2 * 1024 * 1024);
         ~binlog();
         bool        save(xbus_msg* msg);
         xbus_msg*   load();

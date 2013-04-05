@@ -118,72 +118,72 @@ TEST(binlog, writer_reader)
         xbus_msg_free(msg2);
     }
 
-    printf("total writen/read: %lld, %lld, %lld",
+    printf("total writen/read: %lld, %lld, %lld\n",
            total, blog.stat()->wpos, blog.stat()->wcnt);
 }
 
-class BinLogThreadTest {
-public:
-    BinLogThreadTest() : log_(NULL) {}
-    void startup() {
-        log_ = new bus::binlog("3.test", 64 * 1024 * 1024);
-        srand(::time(NULL));
-    }
-    void cleanup() {
-        delete log_;
-    }
+//class BinLogThreadTest {
+//public:
+//    BinLogThreadTest() : log_(NULL) {}
+//    void startup() {
+//        log_ = new bus::binlog("3.test", 64 * 1024 * 1024);
+//        srand(::time(NULL));
+//    }
+//    void cleanup() {
+//        delete log_;
+//    }
 
-    void writer() {
-        char temp[1024] = {0};
-        cxx::sys::cpu_times timer;
-        timer.start();
-        for(size_t i = 0; i < 1000000; ++i) {
-            int32_t tag = rand() % 1024;
-            ASSERT_LT(tag, 1024);
-            xbus_msg* msg = xbus_msg_init(tag, temp, tag);
-            while(!log_->save(msg)) {
-                cxx::sys::threadcontrol::sleep(1);
-            }
-            xbus_msg_free(msg);
-        }
-        timer.stop();
-        printf("writer: %s\n", timer.report().c_str());
-    }
-    void reader() {
-        cxx::sys::cpu_times timer;
-        timer.start();
-        for(size_t i = 0; i < 1000000; ++i) {
-            xbus_msg* msg = NULL;
-            while(!msg) {
-                msg = log_->load();
-                if(!msg)
-                    cxx::sys::threadcontrol::sleep(1);
-            }
-            int     len = xbus_msg_len(msg);
-            int     tag = xbus_msg_tag(msg);
-            ASSERT_EQ(tag, len);
-            ASSERT_LT(tag, 1024);
-            xbus_msg_free(msg);
-        }
-        timer.stop();
-        printf("reader: %s\n", timer.report().c_str());
-    }
-private:
-    bus::binlog*    log_;
-};
+//    void writer() {
+//        char temp[1024] = {0};
+//        cxx::sys::cpu_times timer;
+//        timer.start();
+//        for(size_t i = 0; i < 1000000; ++i) {
+//            int32_t tag = rand() % 1024;
+//            ASSERT_LT(tag, 1024);
+//            xbus_msg* msg = xbus_msg_init(tag, temp, tag);
+//            while(!log_->save(msg)) {
+//                cxx::sys::threadcontrol::sleep(1);
+//            }
+//            xbus_msg_free(msg);
+//        }
+//        timer.stop();
+//        printf("writer: %s\n", timer.report().c_str());
+//    }
+//    void reader() {
+//        cxx::sys::cpu_times timer;
+//        timer.start();
+//        for(size_t i = 0; i < 1000000; ++i) {
+//            xbus_msg* msg = NULL;
+//            while(!msg) {
+//                msg = log_->load();
+//                if(!msg)
+//                    cxx::sys::threadcontrol::sleep(1);
+//            }
+//            int     len = xbus_msg_len(msg);
+//            int     tag = xbus_msg_tag(msg);
+//            ASSERT_EQ(tag, len);
+//            ASSERT_LT(tag, 1024);
+//            xbus_msg_free(msg);
+//        }
+//        timer.stop();
+//        printf("reader: %s\n", timer.report().c_str());
+//    }
+//private:
+//    bus::binlog*    log_;
+//};
 
-TEST(binlog, writer_reader_thread)
-{
-    BinLogThreadTest    binlog;
-    binlog.startup();
+//TEST(binlog, writer_reader_thread)
+//{
+//    BinLogThreadTest    binlog;
+//    binlog.startup();
 
-    cxx::sys::thread t1 = cxx::sys::threadcontrol::create(cxx::MakeDelegate(&binlog, &BinLogThreadTest::writer), "writer");
-    cxx::sys::thread t2 = cxx::sys::threadcontrol::create(cxx::MakeDelegate(&binlog, &BinLogThreadTest::reader), "reader");
-    t1.join();
-    t2.join();
+//    cxx::sys::thread t1 = cxx::sys::threadcontrol::create(cxx::MakeDelegate(&binlog, &BinLogThreadTest::writer), "writer");
+//    cxx::sys::thread t2 = cxx::sys::threadcontrol::create(cxx::MakeDelegate(&binlog, &BinLogThreadTest::reader), "reader");
+//    t1.join();
+//    t2.join();
 
-    binlog.cleanup();
-}
+//    binlog.cleanup();
+//}
 
 TEST(binlogset, simple)
 {

@@ -95,69 +95,66 @@ namespace bus {
 
     size_t shmap_file::load(void *buf, size_t len)
     {
-        assert(len <= caching_);
         if(shm_len_ == 0) {
             shm_len_ = shmfile_->size();
             if(shm_len_ < map_len_)
                 map_len_ = shm_len_;
         }
-
-        if(cur_pos_ < map_off_ || cur_pos_ + len > map_off_ + map_len_) {
-            if(isdirty_) {
-                isdirty_ = false;
-                mapping_->commit();
-            }
-            mapping_->move(cur_pos_, caching_);
-            map_off_ = mapping_->offset();
-            map_len_ = mapping_->size();
-        }
         if(cur_pos_ + len > shm_len_)
             len = shm_len_ - cur_pos_;
 
-        if(cur_pos_ >= map_off_ && cur_pos_ + len <= map_off_ + map_len_) {
-            void* ptr = mapping_->data();
-            off_t off = cur_pos_ - map_off_;
-            memcpy(buf, (char* )ptr + off, len);
-            cur_pos_ += len;
-            return len;
+        size_t done = 0;
+        while(len > done && cur_pos_ < shm_len_) {
+            if(cur_pos_ >= map_off_ && cur_pos_ < map_off_ + map_len_) {
+                size_t left = map_len_ - (cur_pos_ - map_off_);
+                size_t used  = (left > len - done) ? (len - done) : left;
+                isdirty_ = true;
+                void* mp = mapping_->data();
+                off_t of = cur_pos_ - map_off_;
+                memcpy((char* )buf + done, (char* )mp + of, used);
+                cur_pos_    += used;
+                done        += used;
+            }
+            else {
+                flush();
+                mapping_->move(cur_pos_, caching_);
+                map_off_ = mapping_->offset();
+                map_len_ = mapping_->size();
+            }
         }
-        assert(false);
-        return 0;
+        return done;
     }
 
     size_t shmap_file::save(const void *buf, size_t len)
     {
-        assert(len <= caching_);
-
         if(shm_len_ == 0) {
             shm_len_ = shmfile_->size();
             if(shm_len_ < map_len_)
                 map_len_ = shm_len_;
         }
-
-        if(cur_pos_ < map_off_ || cur_pos_ + len > map_off_ + map_len_) {
-            if(isdirty_) {
-                isdirty_ = false;
-                mapping_->commit();
-            }
-            mapping_->move(cur_pos_, caching_);
-            map_off_ = mapping_->offset();
-            map_len_ = mapping_->size();
-        }
-
         if(cur_pos_ + len > shm_len_)
             len = shm_len_ - cur_pos_;
 
-        if(cur_pos_ >= map_off_ && cur_pos_ + len <= map_off_ + map_len_) {
-            isdirty_ = true;
-            void* ptr = mapping_->data();
-            off_t off = cur_pos_ - map_off_;
-            memcpy((char* )ptr + off, buf, len);
-            cur_pos_ += len;
-            return len;
+        size_t done = 0;
+        while(len > done && cur_pos_ < shm_len_) {
+            if(cur_pos_ >= map_off_ && cur_pos_ < map_off_ + map_len_) {
+                size_t left = map_len_ - (cur_pos_ - map_off_);
+                size_t used  = (left > len - done) ? (len - done) : left;
+                isdirty_ = true;
+                void* mp = mapping_->data();
+                off_t of = cur_pos_ - map_off_;
+                memcpy((char* )mp + of, (char* )buf + done, used);
+                cur_pos_    += used;
+                done        += used;
+            }
+            else {
+                flush();
+                mapping_->move(cur_pos_, caching_);
+                map_off_ = mapping_->offset();
+                map_len_ = mapping_->size();
+            }
         }
-        assert(false);
-        return 0;
+        return done;
     }
 
     bool shmap_file::flush()

@@ -22,7 +22,7 @@ namespace bus {
 
 
     ////////////////////////////////////////////////////////////////////////////
-    binlog::binlog(const char *name, off_t capacity)
+    binlog::binlog(const char *name, off_t capacity, size_t cache)
         : hdrfp_(NULL), putfp_(NULL), getfp_(NULL), count_(0), cache_(NULL),
           fname_(name)
     {
@@ -31,8 +31,8 @@ namespace bus {
         putfp_ = file_base::create();
         getfp_ = file_base::create();
         hdrfp_->open(name, 4096);
-        putfp_->open(name, 2*1024*1024);
-        getfp_->open(name, 2*1024*1024);
+        putfp_->open(name, cache);
+        getfp_->open(name, cache);
 
         if(existed) {
             hdrfp_->seek(0, SEEK_SET);
